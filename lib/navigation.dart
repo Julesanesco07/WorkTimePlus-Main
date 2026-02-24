@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dashboard.dart';
-import 'leave.dart';
-import 'attendance.dart';
-import 'task.dart';
+import 'screens/dashboard.dart';
+import 'screens/attendance.dart';
+import 'screens/leave.dart';
+import 'screens/task.dart';
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -14,19 +14,21 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [
-    DashboardPage(),
-    LeaveRequestPage(),
-    AttendancePage(),
-    TaskPage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final pages = [
+      DashboardPage(onNavigate: (index) => setState(() => _currentIndex = index)),
+      const AttendancePage(),
+      const LeaveRequestPage(),
+      const TaskPage(),
+    ];
+
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _pages,
+      body: SafeArea(
+        child: IndexedStack(
+          index: _currentIndex,
+          children: pages,
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -46,25 +48,25 @@ class _MainScaffoldState extends State<MainScaffold> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _NavItem(
-                  icon: Icons.home_rounded,
-                  label: 'Home',
+                  icon: Icons.dashboard_outlined,
+                  label: 'Dashboard',
                   isSelected: _currentIndex == 0,
                   onTap: () => setState(() => _currentIndex = 0),
                 ),
                 _NavItem(
-                  icon: Icons.beach_access_rounded,
-                  label: 'Leave',
+                  icon: Icons.calendar_month_outlined,
+                  label: 'Attendance',
                   isSelected: _currentIndex == 1,
                   onTap: () => setState(() => _currentIndex = 1),
                 ),
                 _NavItem(
-                  icon: Icons.calendar_month_rounded,
-                  label: 'Attendance',
+                  icon: Icons.description_rounded ,
+                  label: 'Leave',
                   isSelected: _currentIndex == 2,
                   onTap: () => setState(() => _currentIndex = 2),
                 ),
                 _NavItem(
-                  icon: Icons.task_alt_rounded,
+                  icon: Icons.checklist_outlined,
                   label: 'Tasks',
                   isSelected: _currentIndex == 3,
                   onTap: () => setState(() => _currentIndex = 3),
@@ -94,8 +96,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const navyBlue = Color(0xFF2B457B);
-    const orange = Color(0xFFE97638);
-    const softGray = Color(0xFFF2F2F2);
+    const orange   = Color(0xFFE97638);
 
     return GestureDetector(
       onTap: onTap,

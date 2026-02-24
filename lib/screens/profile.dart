@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app_state.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -18,12 +19,24 @@ class _ProfilePageState extends State<ProfilePage> {
   // ── Editable profile state ────────────────────────────────
   bool _isEditing = false;
 
-  final _nameController       = TextEditingController(text: 'John Doe');
-  final _emailController      = TextEditingController(text: 'john.doe@company.com');
-  final _phoneController      = TextEditingController(text: '+63 912 345 6789');
-  final _departmentController = TextEditingController(text: 'Engineering');
-  final _positionController   = TextEditingController(text: 'Senior Developer');
-  final _employeeIdController = TextEditingController(text: 'EMP-00142');
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _phoneController;
+  late final TextEditingController _departmentController;
+  late final TextEditingController _positionController;
+  late final TextEditingController _employeeIdController;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = AppState().currentUser;
+    _nameController       = TextEditingController(text: user?.name        ?? '');
+    _emailController      = TextEditingController(text: user?.email       ?? '');
+    _phoneController      = TextEditingController(text: user?.phone       ?? '');
+    _departmentController = TextEditingController(text: user?.department  ?? '');
+    _positionController   = TextEditingController(text: user?.position    ?? '');
+    _employeeIdController = TextEditingController(text: user?.employeeId  ?? '');
+  }
 
   // ── Notification toggles ──────────────────────────────────
   bool _notifyLeave      = true;
@@ -72,7 +85,10 @@ class _ProfilePageState extends State<ProfilePage> {
               backgroundColor: Colors.red.shade400,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              AppState().logout();
+              Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+            },
             child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -197,10 +213,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   border: Border.all(color: Colors.white, width: 3),
                   color: navyBlue,
                 ),
-                child: const Center(
+                child: Center(
                   child: Text(
-                    'JD',
-                    style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
+                    _nameController.text.trim().split(' ').where((w) => w.isNotEmpty).take(2)
+                        .map((w) => w[0].toUpperCase()).join(),
+                    style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -254,7 +271,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 _VertDivider(),
                 _HeroStat(value: '97%', label: 'Attendance'),
                 _VertDivider(),
-                _HeroStat(value: '12',  label: 'Leave Days'),
+                _HeroStat(value: '${AppState().vacationBalance}',  label: 'Leave Days'),
                 _VertDivider(),
                 _HeroStat(value: '14',  label: 'Tasks Done'),
               ],
