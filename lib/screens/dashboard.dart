@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'profile.dart';
 import 'login.dart';
 import '../app_state.dart';
+import '../services/local_db.dart';
 import '../cards/dashboard/greeting_card.dart';
 import '../cards/dashboard/tracking_card.dart';
 import '../cards/dashboard/action_buttons_card.dart';
@@ -24,13 +25,13 @@ class _DashboardPageState extends State<DashboardPage> {
   static const navyBlue   = Color(0xFF2B457B);
   static const steelBlue  = Color(0xFF4A698F);
   static const cloudWhite = Color(0xFFFFFFFF);
-  static const softGray   = Color(0xFFF2F2F2);
 
   // ── Live Clock ────────────────────────────────────────────
   Timer?   _clockTimer;
   DateTime _now = DateTime.now();
 
   // ── Time Tracking ─────────────────────────────────────────
+  // Status: idle | working | on_break | timed_out
   String    _status             = 'idle';
   DateTime? _timeIn;
   DateTime? _timeOut;
@@ -42,10 +43,16 @@ class _DashboardPageState extends State<DashboardPage> {
   Duration  _workedDuration     = Duration.zero;
   String    _availability       = 'Available';
 
-  // ── Task counts (sample) ──────────────────────────────────
-  final int _taskPending    = 3;
-  final int _taskInProgress = 2;
-  final int _taskCompleted  = 2;
+  // ── Task counts (live from DB) ────────────────────────────
+  int _taskPending    = 0;
+  int _taskInProgress = 0;
+  int _taskCompleted  = 0;
+
+  // ── Pending leave count (live from DB) ────────────────────
+  int _pendingLeaveCount = 0;
+
+  // ── Loading flag ──────────────────────────────────────────
+  bool _initialising = true;
 
   bool get _isWorking  => _status == 'working';
   bool get _isOnBreak  => _status == 'on_break';
@@ -53,12 +60,17 @@ class _DashboardPageState extends State<DashboardPage> {
   bool get _isTimedOut => _status == 'timed_out';
   bool get _isIdle     => _status == 'idle';
 
+  // ── Getters for today's date key ──────────────────────────
+  String get _todayKey => LocalDB.dateKey(DateTime.now());
+  String get _userId   => AppState().userId;
+
   @override
   void initState() {
     super.initState();
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      setState(() => _now = DateTime.now());
-    });
+    _clockTimer = Timer.periodic(
+        const Duration(seconds: 1), (_) => setState(() => _now = DateTime.now()));
+    _loadTodayRecord();
+    _loadCounts();
   }
 
   @override
@@ -68,10 +80,94 @@ class _DashboardPageState extends State<DashboardPage> {
     super.dispose();
   }
 
+  // ── Load today's attendance record from DB ────────────────
+  Future<void> _loadTodayRecord() async {
+    final record =
+    await LocalDB.getAttendanceByDate(_userId, _todayKey);
+
+    if (record != null) {
+      final timeInStr  = record['timeIn']  as String?;
+      final timeOutStr = record['timeOut'] as String?;
+
+      setState(() {
+        if (timeInStr != null && timeInStr.isNotEmpty) {
+          _timeIn = _parseTimeStr(timeInStr);
+          _status = 'working';
+        }
+        if (timeOutStr != null && timeOutStr.isNotEmpty) {
+          _timeOut = _parseTimeStr(timeOutStr);
+          _status  = 'timed_out';
+        }
+      });
+
+      // Resume live timer if still working
+      if (_status == 'working' && _timeIn != null) {
+        _restoreWorkTimer();
+      }
+    }
+
+    setState(() => _initialising = false);
+  }
+
+  // ── Load task + leave counts from DB ──────────────────────
+  Future<void> _loadCounts() async {
+    final allTasks = await LocalDB.getTasksByUser(_userId);
+    final pending  = allTasks.where((t) => !(t['done'] as bool? ?? false)).length;
+    final done     = allTasks.where((t) =>  (t['done'] as bool? ?? false)).length;
+
+    final pendingLeaves = await LocalDB.getPendingLeaves(_userId);
+
+    if (mounted) {
+      setState(() {
+        _taskPending       = pending;
+        _taskInProgress    = 0;   // extend later when "in-progress" tag is added
+        _taskCompleted     = done;
+        _pendingLeaveCount = pendingLeaves.length;
+      });
+    }
+  }
+
+  // ── Parse stored "8:05 AM" back to DateTime (today's date) ─
+  DateTime? _parseTimeStr(String s) {
+    try {
+      final parts  = s.split(' ');                // ["8:05", "AM"]
+      final hm     = parts[0].split(':');         // ["8", "05"]
+      int hour     = int.parse(hm[0]);
+      final minute = int.parse(hm[1]);
+      if (parts.length > 1) {
+        if (parts[1] == 'PM' && hour != 12) hour += 12;
+        if (parts[1] == 'AM' && hour == 12) hour = 0;
+      }
+      final now = DateTime.now();
+      return DateTime(now.year, now.month, now.day, hour, minute);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // ── Restore work timer from loaded timeIn ─────────────────
+  void _restoreWorkTimer() {
+    _workTimer?.cancel();
+    _workTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_timeIn == null) return;
+      final gross = DateTime.now().difference(_timeIn!);
+      final brk   = (_isOnBreak && _breakStart != null)
+          ? DateTime.now().difference(_breakStart!)
+          : Duration.zero;
+      if (mounted) {
+        setState(() {
+          _workedDuration = gross - _totalBreakDuration - brk;
+          if (_workedDuration.isNegative) _workedDuration = Duration.zero;
+        });
+      }
+    });
+  }
+
   // ── Handlers ──────────────────────────────────────────────
-  void _handleTimeIn() {
+  Future<void> _handleTimeIn() async {
     if (_isTimedIn) return;
     final now = DateTime.now();
+
     setState(() {
       _status             = 'working';
       _timeIn             = now;
@@ -81,19 +177,58 @@ class _DashboardPageState extends State<DashboardPage> {
       _lastBreakStart     = null;
       _breakEnd           = null;
     });
-    _startWorkTimer();
+    _restoreWorkTimer();
+
+    // Persist to LocalDB
+    await LocalDB.saveAttendanceRecord({
+      'id':      '${_userId}_$_todayKey',
+      'userId':  _userId,
+      'date':    _todayKey,
+      'timeIn':  _formatTime(now),
+      'timeOut': '',
+      'hours':   '',
+      'status':  _isLate(now) ? 'Late' : 'Present',
+    });
+
     _showSnack('Clocked in at ${_formatTime(now)}', Colors.green.shade600);
   }
 
-  void _handleTimeOut() {
+  Future<void> _handleTimeOut() async {
     if (!_isTimedIn) return;
     _workTimer?.cancel();
     final now = DateTime.now();
+
     if (_isOnBreak && _breakStart != null) {
       _totalBreakDuration += now.difference(_breakStart!);
       _breakStart = null;
     }
-    setState(() { _status = 'timed_out'; _timeOut = now; });
+
+    // Calculate final hours
+    final gross    = _timeIn != null ? now.difference(_timeIn!) : Duration.zero;
+    final net      = gross - _totalBreakDuration;
+    final netSafe  = net.isNegative ? Duration.zero : net;
+    final hoursStr =
+        '${netSafe.inHours}h ${netSafe.inMinutes % 60}m';
+
+    setState(() {
+      _status  = 'timed_out';
+      _timeOut = now;
+      _workedDuration = netSafe;
+    });
+
+    // Update record in LocalDB
+    final existing =
+    await LocalDB.getAttendanceByDate(_userId, _todayKey);
+    await LocalDB.saveAttendanceRecord({
+      'id':      '${_userId}_$_todayKey',
+      'userId':  _userId,
+      'date':    _todayKey,
+      'timeIn':  existing?['timeIn'] ?? _formatTime(_timeIn ?? now),
+      'timeOut': _formatTime(now),
+      'hours':   hoursStr,
+      'status':  existing?['status'] ?? 'Present',
+    });
+
     _showSnack('Clocked out at ${_formatTime(now)}', navyBlue);
   }
 
@@ -118,24 +253,12 @@ class _DashboardPageState extends State<DashboardPage> {
       _breakStart = null;
     }
     setState(() { _status = 'working'; _breakEnd = now; });
-    _startWorkTimer();
+    _restoreWorkTimer();
     _showSnack('Break ended. Back to work!', const Color(0xFFE97638));
   }
 
-  void _startWorkTimer() {
-    _workTimer?.cancel();
-    _workTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (_timeIn == null) return;
-      final gross        = DateTime.now().difference(_timeIn!);
-      final currentBreak = (_isOnBreak && _breakStart != null)
-          ? DateTime.now().difference(_breakStart!)
-          : Duration.zero;
-      setState(() {
-        _workedDuration = gross - _totalBreakDuration - currentBreak;
-        if (_workedDuration.isNegative) _workedDuration = Duration.zero;
-      });
-    });
-  }
+  // ── Helpers ───────────────────────────────────────────────
+  bool _isLate(DateTime dt) => dt.hour > 8 || (dt.hour == 8 && dt.minute > 0);
 
   String _formatTime(DateTime dt) {
     final h  = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
@@ -166,22 +289,30 @@ class _DashboardPageState extends State<DashboardPage> {
   // ── Build ─────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final user     = AppState().currentUser;
-    final name     = user?.name ?? 'User';
+    final name     = AppState().userName;
     final initials = name.trim().split(' ').take(2)
         .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '').join();
+
+    if (_initialising) {
+      return const Scaffold(
+        backgroundColor: cloudWhite,
+        body: Center(
+          child: CircularProgressIndicator(color: navyBlue),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: cloudWhite,
       body: CustomScrollView(
         slivers: [
 
-          // ── Scrollable App Bar ───────────────────────────
+          // ── App Bar ────────────────────────────────────────
           SliverAppBar(
             backgroundColor: cloudWhite,
             elevation: 0,
-            floating: true,       // reappears as soon as you scroll up
-            snap: true,           // snaps fully in/out — no half-visible state
+            floating: true,
+            snap: true,
             automaticallyImplyLeading: false,
             titleSpacing: 16,
             title: Transform.scale(
@@ -203,10 +334,18 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ),
             actions: [
+              // ── Profile avatar + name ────────────────────
               GestureDetector(
-                onTap: () => Navigator.push(
+                onTap: () async {
+                  await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const ProfilePage())),
+                    MaterialPageRoute(
+                        builder: (_) => const ProfilePage()),
+                  );
+                  // Reload user in case profile was edited
+                  await AppState().reloadUser();
+                  if (mounted) setState(() {});
+                },
                 child: Row(children: [
                   CircleAvatar(
                     radius: 14,
@@ -225,10 +364,13 @@ class _DashboardPageState extends State<DashboardPage> {
                           fontWeight: FontWeight.w600)),
                 ]),
               ),
+              // ── Logout ────────────────────────────────────
               IconButton(
                 icon: const Icon(Icons.logout_rounded, color: steelBlue),
-                onPressed: () {
-                  AppState().logout();
+                onPressed: () async {
+                  _workTimer?.cancel();
+                  await AppState().logout();
+                  if (!mounted) return;
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (_) => const LoginPage()),
@@ -238,7 +380,7 @@ class _DashboardPageState extends State<DashboardPage> {
             ],
           ),
 
-          // ── Page content ─────────────────────────────────
+          // ── Page content ────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             sliver: SliverList(
@@ -249,7 +391,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   now:                   _now,
                   status:                _status,
                   availability:          _availability,
-                  onAvailabilityChanged: (v) => setState(() => _availability = v),
+                  onAvailabilityChanged: (v) =>
+                      setState(() => _availability = v),
                 ),
                 const SizedBox(height: 16),
 
@@ -264,7 +407,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 const SizedBox(height: 12),
 
-                // Time in/out + break buttons
+                // Action buttons
                 ActionButtonsCard(
                   status:       _status,
                   onTimeIn:     _handleTimeIn,
@@ -283,22 +426,20 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 const SizedBox(height: 20),
 
-                // Quick stats label
-                const Text(
-                  'Quick Stats',
-                  style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: navyBlue,
-                      letterSpacing: 0.2),
-                ),
+                // Quick Stats
+                const Text('Quick Stats',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: navyBlue,
+                        letterSpacing: 0.2)),
                 const SizedBox(height: 10),
                 const StatsCard(),
                 const SizedBox(height: 16),
 
                 // Pending leave
                 PendingLeaveCard(
-                  pendingCount: 2,
+                  pendingCount: _pendingLeaveCount,
                   onViewTap:    () => widget.onNavigate?.call(2),
                 ),
                 const SizedBox(height: 16),
@@ -314,7 +455,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
                 // Device info
                 const DeviceCard(),
-
               ]),
             ),
           ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
+import '../services/local_db.dart';
+import 'login.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -18,6 +20,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // ── Editable profile state ────────────────────────────────
   bool _isEditing = false;
+  bool _isSaving  = false;
 
   late final TextEditingController _nameController;
   late final TextEditingController _emailController;
@@ -29,13 +32,14 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    // currentUser is now Map<String, dynamic> — use bracket notation
     final user = AppState().currentUser;
-    _nameController       = TextEditingController(text: user?.name        ?? '');
-    _emailController      = TextEditingController(text: user?.email       ?? '');
-    _phoneController      = TextEditingController(text: user?.phone       ?? '');
-    _departmentController = TextEditingController(text: user?.department  ?? '');
-    _positionController   = TextEditingController(text: user?.position    ?? '');
-    _employeeIdController = TextEditingController(text: user?.employeeId  ?? '');
+    _nameController       = TextEditingController(text: user?['name']       as String? ?? '');
+    _emailController      = TextEditingController(text: user?['email']      as String? ?? '');
+    _phoneController      = TextEditingController(text: user?['phone']      as String? ?? '');
+    _departmentController = TextEditingController(text: user?['department'] as String? ?? '');
+    _positionController   = TextEditingController(text: user?['position']   as String? ?? '');
+    _employeeIdController = TextEditingController(text: user?['employeeId'] as String? ?? '');
   }
 
   // ── Notification toggles ──────────────────────────────────
@@ -54,18 +58,42 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  void _toggleEdit() {
+  // ── Save to LocalDB ───────────────────────────────────────
+  Future<void> _toggleEdit() async {
     if (_isEditing) {
-      // Save
+      setState(() => _isSaving = true);
+
+      final user = AppState().currentUser;
+      if (user != null) {
+        final updated = Map<String, dynamic>.from(user)
+          ..['name']       = _nameController.text.trim()
+          ..['email']      = _emailController.text.trim()
+          ..['phone']      = _phoneController.text.trim()
+          ..['department'] = _departmentController.text.trim()
+          ..['position']   = _positionController.text.trim();
+        // employeeId is intentionally NOT editable
+
+        await LocalDB.saveUser(updated);
+        await AppState().reloadUser();
+      }
+
+      setState(() {
+        _isSaving  = false;
+        _isEditing = false;
+      });
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Profile updated successfully!', style: TextStyle(color: Colors.white)),
+        content: const Text('Profile updated successfully!',
+            style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.green.shade600,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
       ));
+    } else {
+      setState(() => _isEditing = true);
     }
-    setState(() => _isEditing = !_isEditing);
   }
 
   void _showLogoutDialog() {
@@ -73,8 +101,11 @@ class _ProfilePageState extends State<ProfilePage> {
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Sign Out', style: TextStyle(color: navyBlue, fontWeight: FontWeight.bold, fontSize: 16)),
-        content: const Text('Are you sure you want to sign out?', style: TextStyle(fontSize: 14, color: steelBlue)),
+        title: const Text('Sign Out',
+            style: TextStyle(
+                color: navyBlue, fontWeight: FontWeight.bold, fontSize: 16)),
+        content: const Text('Are you sure you want to sign out?',
+            style: TextStyle(fontSize: 14, color: steelBlue)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -83,11 +114,16 @@ class _ProfilePageState extends State<ProfilePage> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade400,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: () {
-              AppState().logout();
-              Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+            onPressed: () async {
+              await AppState().logout();
+              if (!mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const LoginPage()),
+                    (route) => false,
+              );
             },
             child: const Text('Sign Out', style: TextStyle(color: Colors.white)),
           ),
@@ -105,40 +141,53 @@ class _ProfilePageState extends State<ProfilePage> {
         backgroundColor: cloudWhite,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, color: navyBlue, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_rounded,
+              color: navyBlue, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Profile', style: TextStyle(color: navyBlue, fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text('Profile',
+            style: TextStyle(
+                color: navyBlue, fontWeight: FontWeight.bold, fontSize: 18)),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: GestureDetector(
-              onTap: _toggleEdit,
+              onTap: _isSaving ? null : _toggleEdit,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                 decoration: BoxDecoration(
-                  color: _isEditing ? Colors.green.shade600 : navyBlue.withOpacity(0.08),
+                  color: _isEditing
+                      ? Colors.green.shade600
+                      : navyBlue.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _isEditing ? Icons.check_rounded : Icons.edit_rounded,
-                      size: 15,
+                child: _isSaving
+                    ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+                    : Row(children: [
+                  Icon(
+                    _isEditing
+                        ? Icons.check_rounded
+                        : Icons.edit_rounded,
+                    size: 15,
+                    color: _isEditing ? Colors.white : navyBlue,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    _isEditing ? 'Save' : 'Edit',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                       color: _isEditing ? Colors.white : navyBlue,
                     ),
-                    const SizedBox(width: 5),
-                    Text(
-                      _isEditing ? 'Save' : 'Edit',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: _isEditing ? Colors.white : navyBlue,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ]),
               ),
             ),
           ),
@@ -157,17 +206,43 @@ class _ProfilePageState extends State<ProfilePage> {
                   _buildSectionTitle('Personal Information'),
                   const SizedBox(height: 12),
                   _buildInfoCard([
-                    _ProfileField(label: 'Full Name',    icon: Icons.person_rounded,       controller: _nameController,    isEditing: _isEditing),
-                    _ProfileField(label: 'Email',        icon: Icons.email_outlined,       controller: _emailController,   isEditing: _isEditing, keyboardType: TextInputType.emailAddress),
-                    _ProfileField(label: 'Phone',        icon: Icons.phone_rounded,        controller: _phoneController,   isEditing: _isEditing, keyboardType: TextInputType.phone),
+                    _ProfileField(
+                        label: 'Full Name',
+                        icon: Icons.person_rounded,
+                        controller: _nameController,
+                        isEditing: _isEditing),
+                    _ProfileField(
+                        label: 'Email',
+                        icon: Icons.email_outlined,
+                        controller: _emailController,
+                        isEditing: _isEditing,
+                        keyboardType: TextInputType.emailAddress),
+                    _ProfileField(
+                        label: 'Phone',
+                        icon: Icons.phone_rounded,
+                        controller: _phoneController,
+                        isEditing: _isEditing,
+                        keyboardType: TextInputType.phone),
                   ]),
                   const SizedBox(height: 20),
                   _buildSectionTitle('Work Information'),
                   const SizedBox(height: 12),
                   _buildInfoCard([
-                    _ProfileField(label: 'Employee ID',  icon: Icons.badge_rounded,         controller: _employeeIdController, isEditing: false),
-                    _ProfileField(label: 'Department',   icon: Icons.business_rounded,      controller: _departmentController, isEditing: _isEditing),
-                    _ProfileField(label: 'Position',     icon: Icons.work_outline_rounded,  controller: _positionController,   isEditing: _isEditing),
+                    _ProfileField(
+                        label: 'Employee ID',
+                        icon: Icons.badge_rounded,
+                        controller: _employeeIdController,
+                        isEditing: false), // always read-only
+                    _ProfileField(
+                        label: 'Department',
+                        icon: Icons.business_rounded,
+                        controller: _departmentController,
+                        isEditing: _isEditing),
+                    _ProfileField(
+                        label: 'Position',
+                        icon: Icons.work_outline_rounded,
+                        controller: _positionController,
+                        isEditing: _isEditing),
                   ]),
                   const SizedBox(height: 20),
                   _buildSectionTitle('Notifications'),
@@ -189,6 +264,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // ── Profile Hero ──────────────────────────────────────────
   Widget _buildProfileHero() {
+    final initials = _nameController.text
+        .trim()
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -201,7 +284,6 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Column(
         children: [
           const SizedBox(height: 24),
-          // Avatar
           Stack(
             alignment: Alignment.bottomRight,
             children: [
@@ -215,9 +297,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 child: Center(
                   child: Text(
-                    _nameController.text.trim().split(' ').where((w) => w.isNotEmpty).take(2)
-                        .map((w) => w[0].toUpperCase()).join(),
-                    style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold),
+                    initials,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -230,14 +314,18 @@ class _ProfilePageState extends State<ProfilePage> {
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white, width: 2),
                   ),
-                  child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                  child: const Icon(Icons.camera_alt_rounded,
+                      size: 14, color: Colors.white),
                 ),
             ],
           ),
           const SizedBox(height: 14),
           Text(
             _nameController.text,
-            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
@@ -246,14 +334,19 @@ class _ProfilePageState extends State<ProfilePage> {
           ),
           const SizedBox(height: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.15),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               _employeeIdController.text,
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600, letterSpacing: 0.5),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5),
             ),
           ),
           const SizedBox(height: 20),
@@ -265,20 +358,19 @@ class _ProfilePageState extends State<ProfilePage> {
               color: Colors.white.withOpacity(0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: Row(
-              children: [
-                _HeroStat(value: '3.2', label: 'Yrs Tenure'),
-                _VertDivider(),
-                _HeroStat(value: '97%', label: 'Attendance'),
-                _VertDivider(),
-                _HeroStat(value: '${AppState().vacationBalance}',  label: 'Leave Days'),
-                _VertDivider(),
-                _HeroStat(value: '14',  label: 'Tasks Done'),
-              ],
-            ),
+            child: Row(children: [
+              const _HeroStat(value: '3.2', label: 'Yrs Tenure'),
+              _VertDivider(),
+              const _HeroStat(value: '97%', label: 'Attendance'),
+              _VertDivider(),
+              _HeroStat(
+                  value: '${AppState().vacationBalance}',
+                  label: 'Leave Days'),
+              _VertDivider(),
+              const _HeroStat(value: '14', label: 'Tasks Done'),
+            ]),
           ),
           const SizedBox(height: 24),
-          // Wave clip
           ClipPath(
             clipper: _WaveClipper(),
             child: Container(height: 32, color: cloudWhite),
@@ -296,36 +388,34 @@ class _ProfilePageState extends State<ProfilePage> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: softGray, width: 1.5),
       ),
-      child: Column(
-        children: [
-          _ToggleRow(
-            icon: Icons.beach_access_rounded,
-            iconColor: steelBlue,
-            label: 'Leave Approvals',
-            subtitle: 'Get notified when leave status changes',
-            value: _notifyLeave,
-            onChanged: (v) => setState(() => _notifyLeave = v),
-          ),
-          _Divider(),
-          _ToggleRow(
-            icon: Icons.calendar_month_rounded,
-            iconColor: orange,
-            label: 'Attendance Alerts',
-            subtitle: 'Reminders for clock-in and clock-out',
-            value: _notifyAttendance,
-            onChanged: (v) => setState(() => _notifyAttendance = v),
-          ),
-          _Divider(),
-          _ToggleRow(
-            icon: Icons.task_alt_rounded,
-            iconColor: navyBlue,
-            label: 'Task Reminders',
-            subtitle: 'Alerts for upcoming task deadlines',
-            value: _notifyTasks,
-            onChanged: (v) => setState(() => _notifyTasks = v),
-          ),
-        ],
-      ),
+      child: Column(children: [
+        _ToggleRow(
+          icon: Icons.beach_access_rounded,
+          iconColor: steelBlue,
+          label: 'Leave Approvals',
+          subtitle: 'Get notified when leave status changes',
+          value: _notifyLeave,
+          onChanged: (v) => setState(() => _notifyLeave = v),
+        ),
+        _Divider(),
+        _ToggleRow(
+          icon: Icons.calendar_month_rounded,
+          iconColor: orange,
+          label: 'Attendance Alerts',
+          subtitle: 'Reminders for clock-in and clock-out',
+          value: _notifyAttendance,
+          onChanged: (v) => setState(() => _notifyAttendance = v),
+        ),
+        _Divider(),
+        _ToggleRow(
+          icon: Icons.task_alt_rounded,
+          iconColor: navyBlue,
+          label: 'Task Reminders',
+          subtitle: 'Alerts for upcoming task deadlines',
+          value: _notifyTasks,
+          onChanged: (v) => setState(() => _notifyTasks = v),
+        ),
+      ]),
     );
   }
 
@@ -337,39 +427,37 @@ class _ProfilePageState extends State<ProfilePage> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: softGray, width: 1.5),
       ),
-      child: Column(
-        children: [
-          _AccountRow(
-            icon: Icons.lock_outline_rounded,
-            iconColor: steelBlue,
-            label: 'Change Password',
-            onTap: () {},
-          ),
-          _Divider(),
-          _AccountRow(
-            icon: Icons.privacy_tip_outlined,
-            iconColor: steelBlue,
-            label: 'Privacy Policy',
-            onTap: () {},
-          ),
-          _Divider(),
-          _AccountRow(
-            icon: Icons.help_outline_rounded,
-            iconColor: steelBlue,
-            label: 'Help & Support',
-            onTap: () {},
-          ),
-          _Divider(),
-          _AccountRow(
-            icon: Icons.logout_rounded,
-            iconColor: Colors.red.shade400,
-            label: 'Sign Out',
-            labelColor: Colors.red.shade400,
-            onTap: _showLogoutDialog,
-            showArrow: false,
-          ),
-        ],
-      ),
+      child: Column(children: [
+        _AccountRow(
+          icon: Icons.lock_outline_rounded,
+          iconColor: steelBlue,
+          label: 'Change Password',
+          onTap: () {},
+        ),
+        _Divider(),
+        _AccountRow(
+          icon: Icons.privacy_tip_outlined,
+          iconColor: steelBlue,
+          label: 'Privacy Policy',
+          onTap: () {},
+        ),
+        _Divider(),
+        _AccountRow(
+          icon: Icons.help_outline_rounded,
+          iconColor: steelBlue,
+          label: 'Help & Support',
+          onTap: () {},
+        ),
+        _Divider(),
+        _AccountRow(
+          icon: Icons.logout_rounded,
+          iconColor: Colors.red.shade400,
+          label: 'Sign Out',
+          labelColor: Colors.red.shade400,
+          onTap: _showLogoutDialog,
+          showArrow: false,
+        ),
+      ]),
     );
   }
 
@@ -377,7 +465,11 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: navyBlue, letterSpacing: 0.2),
+      style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: navyBlue,
+          letterSpacing: 0.2),
     );
   }
 
@@ -390,12 +482,10 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
       child: Column(
         children: fields.asMap().entries.map((e) {
-          return Column(
-            children: [
-              e.value,
-              if (e.key < fields.length - 1) _Divider(),
-            ],
-          );
+          return Column(children: [
+            e.value,
+            if (e.key < fields.length - 1) _Divider(),
+          ]);
         }).toList(),
       ),
     );
@@ -408,8 +498,10 @@ class _WaveClipper extends CustomClipper<Path> {
   Path getClip(Size size) {
     final path = Path();
     path.lineTo(0, 0);
-    path.quadraticBezierTo(size.width * 0.25, size.height, size.width * 0.5, size.height * 0.5);
-    path.quadraticBezierTo(size.width * 0.75, 0, size.width, size.height * 0.5);
+    path.quadraticBezierTo(
+        size.width * 0.25, size.height, size.width * 0.5, size.height * 0.5);
+    path.quadraticBezierTo(
+        size.width * 0.75, 0, size.width, size.height * 0.5);
     path.lineTo(size.width, 0);
     path.close();
     return path;
@@ -430,9 +522,14 @@ class _HeroStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Column(children: [
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(value,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold)),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(color: Colors.white60, fontSize: 10)),
+        Text(label,
+            style: const TextStyle(color: Colors.white60, fontSize: 10)),
       ]),
     );
   }
@@ -441,14 +538,20 @@ class _HeroStat extends StatelessWidget {
 class _VertDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Container(width: 1, height: 30, color: Colors.white.withOpacity(0.2));
+    return Container(
+        width: 1, height: 30, color: Colors.white.withOpacity(0.2));
   }
 }
 
 class _Divider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Divider(height: 1, thickness: 1, color: Color(0xFFF2F2F2), indent: 16, endIndent: 16);
+    return const Divider(
+        height: 1,
+        thickness: 1,
+        color: Color(0xFFF2F2F2),
+        indent: 16,
+        endIndent: 16);
   }
 }
 
@@ -462,7 +565,6 @@ class _ProfileField extends StatelessWidget {
   static const navyBlue  = Color(0xFF2B457B);
   static const steelBlue = Color(0xFF4A698F);
   static const softGray  = Color(0xFFF2F2F2);
-  static const orange    = Color(0xFFE97638);
 
   const _ProfileField({
     required this.label,
@@ -476,53 +578,63 @@ class _ProfileField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: steelBlue.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: steelBlue, size: 18),
+      child: Row(children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: steelBlue.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E), fontWeight: FontWeight.w500)),
-                const SizedBox(height: 3),
-                isEditing
-                    ? TextField(
-                  controller: controller,
-                  keyboardType: keyboardType,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: navyBlue),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    filled: true,
-                    fillColor: softGray,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: navyBlue, width: 1.5),
-                    ),
+          child: Icon(icon, color: steelBlue, size: 18),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF9E9E9E),
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(height: 3),
+              isEditing
+                  ? TextField(
+                controller: controller,
+                keyboardType: keyboardType,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: navyBlue),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 8),
+                  filled: true,
+                  fillColor: softGray,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
                   ),
-                )
-                    : Text(
-                  controller.text,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: navyBlue),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(
+                        color: navyBlue, width: 1.5),
+                  ),
                 ),
-              ],
-            ),
+              )
+                  : Text(
+                controller.text,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: navyBlue),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ]),
     );
   }
 }
@@ -535,8 +647,8 @@ class _ToggleRow extends StatelessWidget {
   final bool     value;
   final void Function(bool) onChanged;
 
-  static const navyBlue  = Color(0xFF2B457B);
-  static const orange    = Color(0xFFE97638);
+  static const navyBlue = Color(0xFF2B457B);
+  static const orange   = Color(0xFFE97638);
 
   const _ToggleRow({
     required this.icon,
@@ -553,16 +665,30 @@ class _ToggleRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(children: [
         Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, color: iconColor, size: 18),
         ),
         const SizedBox(width: 14),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: navyBlue)),
-          const SizedBox(height: 2),
-          Text(subtitle, style: const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E))),
-        ])),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: navyBlue)),
+              const SizedBox(height: 2),
+              Text(subtitle,
+                  style: const TextStyle(
+                      fontSize: 11, color: Color(0xFF9E9E9E))),
+            ],
+          ),
+        ),
         Switch.adaptive(
           value: value,
           onChanged: onChanged,
@@ -575,12 +701,12 @@ class _ToggleRow extends StatelessWidget {
 }
 
 class _AccountRow extends StatelessWidget {
-  final IconData icon;
-  final Color    iconColor;
-  final String   label;
-  final Color?   labelColor;
+  final IconData     icon;
+  final Color        iconColor;
+  final String       label;
+  final Color?       labelColor;
   final VoidCallback onTap;
-  final bool     showArrow;
+  final bool         showArrow;
 
   static const navyBlue  = Color(0xFF2B457B);
   static const steelBlue = Color(0xFF4A698F);
@@ -600,10 +726,12 @@ class _AccountRow extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding:
+        const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(children: [
           Container(
-            width: 36, height: 36,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
               color: iconColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
@@ -611,10 +739,16 @@ class _AccountRow extends StatelessWidget {
             child: Icon(icon, color: iconColor, size: 18),
           ),
           const SizedBox(width: 14),
-          Expanded(child: Text(label,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: labelColor ?? navyBlue))),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: labelColor ?? navyBlue)),
+          ),
           if (showArrow)
-            const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF9E9E9E)),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: Color(0xFF9E9E9E)),
         ]),
       ),
     );

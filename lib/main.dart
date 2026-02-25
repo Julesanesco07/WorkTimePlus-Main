@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'screens/login.dart';
+import 'services/local_db.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Seed the demo account once (no-op if already exists)
+  await LocalDB.seedDemoUser();
+
   runApp(const WorktimePlusApp());
 }
 

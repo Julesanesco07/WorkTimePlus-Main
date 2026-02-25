@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:worktime/services/local_db.dart';
 
 class LeaveHistory extends StatefulWidget {
   final List<Map<String, dynamic>> pending;
   final List<Map<String, dynamic>> history;
+  final int refreshTrigger;
 
   const LeaveHistory({
     super.key,
     required this.pending,
     required this.history,
+    this.refreshTrigger = 0,
   });
 
   @override
@@ -25,13 +28,43 @@ class _LeaveHistoryState extends State<LeaveHistory> {
   static const yellowBorder = Color(0xFFFFE082);
   static const yellowDeep   = Color(0xFFF9A825);
 
+  // ── LocalDB-backed lists ──────────────────────────────────
+  late List<Map<String, dynamic>> _pending;
+  late List<Map<String, dynamic>> _history;
+
   // ── History filter ────────────────────────────────────────
   String _filter = 'All';
   static const _filters = ['All', 'Pending', 'Approved', 'Rejected'];
 
+  @override
+  void initState() {
+    super.initState();
+    // Start with whatever the parent passed in
+    _pending = List.from(widget.pending);
+    _history = List.from(widget.history);
+    _loadFromDb();
+  }
+
+  @override
+  void didUpdateWidget(LeaveHistory old) {
+    super.didUpdateWidget(old);
+    // Reload when parent signals a new submission
+    if (old.refreshTrigger != widget.refreshTrigger) _loadFromDb();
+  }
+
+  Future<void> _loadFromDb() async {
+    final all = await LocalDB.getLeaves();
+    if (!mounted) return;
+    setState(() {
+      _pending = all.where((l) => l['status'] == 'Pending').toList();
+      _history = all.where((l) => l['status'] != 'Pending').toList()
+        ..sort((a, b) => (b['createdAt'] as String).compareTo(a['createdAt'] as String));
+    });
+  }
+
   List<Map<String, dynamic>> get _filteredHistory {
-    if (_filter == 'All') return widget.history;
-    return widget.history.where((h) => h['status'] == _filter).toList();
+    if (_filter == 'All') return _history;
+    return _history.where((h) => h['status'] == _filter).toList();
   }
 
   Color _statusColor(String status) {
@@ -109,7 +142,7 @@ class _LeaveHistoryState extends State<LeaveHistory> {
                 ),
                 child: Center(
                   child: Text(
-                    '${widget.pending.length}',
+                    '${_pending.length}',
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
@@ -118,10 +151,10 @@ class _LeaveHistoryState extends State<LeaveHistory> {
           ),
 
           // ── Pending cards ─────────────────────────────────
-          if (widget.pending.isEmpty)
+          if (_pending.isEmpty)
             _emptyState('No pending leave requests')
           else
-            ...widget.pending.map((item) => _buildPendingCard(item)),
+            ..._pending.map((item) => _buildPendingCard(item)),
         ],
       ),
     );

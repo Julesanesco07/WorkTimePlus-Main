@@ -1,155 +1,44 @@
-import 'models/user_model.dart';
+import 'services/local_db.dart';
 
+// ─────────────────────────────────────────────────────────────
+// AppState  —  single-instance session store
+// Loaded from LocalDB on login; cleared on logout.
+// ─────────────────────────────────────────────────────────────
 class AppState {
   static final AppState _instance = AppState._internal();
   factory AppState() => _instance;
   AppState._internal();
 
-  // ── Current logged-in user ────────────────────────────────
-  DemoUser? _currentUser;
-  DemoUser? get currentUser => _currentUser;
-  bool get isLoggedIn => _currentUser != null;
+  // ── Current user (plain map from LocalDB) ────────────────
+  Map<String, dynamic>? _user;
+  Map<String, dynamic>? get currentUser => _user;
+  bool get isLoggedIn => _user != null;
 
-  // ── Leave balances (sourced from user model at login) ─────
-  int vacationBalance = 0;
-  int sickBalance     = 0;
+  // ── Convenience getters ───────────────────────────────────
+  String get userId   => _user?['id']           as String? ?? '';
+  String get userName => _user?['name']         as String? ?? 'User';
+  String get userEmail=> _user?['email']        as String? ?? '';
+  int get vacationBalance => _user?['vacationDays'] as int? ?? 0;
+  int get sickBalance     => _user?['sickDays']     as int? ?? 0;
 
   // ── Login / Logout ────────────────────────────────────────
-  bool login(String email, String password) {
-    final user = DemoUser.authenticate(email, password);
-    if (user != null) {
-      _currentUser    = user;
-      vacationBalance = user.vacationBalance;
-      sickBalance     = user.sickBalance;
-      return true;
-    }
-    return false;
+  /// Returns true and stores user if credentials match.
+  Future<bool> login(String email, String password) async {
+    final user = await LocalDB.getUserByEmail(email);
+    if (user == null) return false;
+    if (user['password'] != password) return false;
+    _user = user;
+    return true;
   }
 
-  void logout() {
-    _currentUser    = null;
-    vacationBalance = 0;
-    sickBalance     = 0;
-    _isClockedIn    = false;
-    _clockInTime    = null;
-    _clockOutTime   = null;
-    _attendanceRecords.clear();
+  Future<void> logout() async {
+    _user = null;
   }
 
-  // ── Clock in/out state ────────────────────────────────────
-  bool _isClockedIn = false;
-  DateTime? _clockInTime;
-  DateTime? _clockOutTime;
-
-  bool get isClockedIn => _isClockedIn;
-  DateTime? get clockInTime => _clockInTime;
-  DateTime? get clockOutTime => _clockOutTime;
-
-  // ── Attendance records (key: yyyy-MM-dd) ──────────────────
-  final Map<String, Map<String, dynamic>> _attendanceRecords = {};
-  Map<String, Map<String, dynamic>> get attendanceRecords => _attendanceRecords;
-
-  void clockIn() {
-    _isClockedIn  = true;
-    _clockInTime  = DateTime.now();
-    _clockOutTime = null;
-
-    final today = _formatDate(DateTime.now());
-    _attendanceRecords[today] = {
-      'date':    DateTime.now(),
-      'timeIn':  _formatTime(_clockInTime!),
-      'timeOut': '–',
-      'hours':   '–',
-      'status':  'Present',
-    };
+  // ── Reload user from DB (e.g. after profile edit) ─────────
+  Future<void> reloadUser() async {
+    if (userId.isEmpty) return;
+    final fresh = await LocalDB.getUserById(userId);
+    if (fresh != null) _user = fresh;
   }
-
-  void clockOut() {
-    if (!_isClockedIn || _clockInTime == null) return;
-
-    _clockOutTime = DateTime.now();
-    _isClockedIn  = false;
-
-    final today    = _formatDate(DateTime.now());
-    final duration = _clockOutTime!.difference(_clockInTime!);
-    final hours    = duration.inHours;
-    final mins     = duration.inMinutes % 60;
-
-    _attendanceRecords[today] = {
-      'date':    DateTime.now(),
-      'timeIn':  _formatTime(_clockInTime!),
-      'timeOut': _formatTime(_clockOutTime!),
-      'hours':   '${hours}h ${mins}m',
-      'status':  'Present',
-    };
-  }
-
-  String _formatDate(DateTime dt) =>
-      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-
-  String _formatTime(DateTime dt) {
-    final hour   = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-    final min    = dt.minute.toString().padLeft(2, '0');
-    final period = dt.hour >= 12 ? 'PM' : 'AM';
-    return '$hour:$min $period';
-  }
-}
-
-
-// ── Clock in/out state ────────────────────────────────────
-bool _isClockedIn = false;
-DateTime? _clockInTime;
-DateTime? _clockOutTime;
-
-bool get isClockedIn => _isClockedIn;
-DateTime? get clockInTime => _clockInTime;
-DateTime? get clockOutTime => _clockOutTime;
-
-// ── Attendance records (key: yyyy-MM-dd) ──────────────────
-final Map<String, Map<String, dynamic>> _attendanceRecords = {};
-Map<String, Map<String, dynamic>> get attendanceRecords => _attendanceRecords;
-
-void clockIn() {
-  _isClockedIn = true;
-  _clockInTime = DateTime.now();
-  _clockOutTime = null;
-
-  final today = _formatDate(DateTime.now());
-  _attendanceRecords[today] = {
-    'date': DateTime.now(),
-    'timeIn': _formatTime(_clockInTime!),
-    'timeOut': '–',
-    'hours': '–',
-    'status': 'Present',
-  };
-}
-
-void clockOut() {
-  if (!_isClockedIn || _clockInTime == null) return;
-
-  _clockOutTime = DateTime.now();
-  _isClockedIn = false;
-
-  final today = _formatDate(DateTime.now());
-  final duration = _clockOutTime!.difference(_clockInTime!);
-  final hours = duration.inHours;
-  final mins = duration.inMinutes % 60;
-
-  _attendanceRecords[today] = {
-    'date': DateTime.now(),
-    'timeIn': _formatTime(_clockInTime!),
-    'timeOut': _formatTime(_clockOutTime!),
-    'hours': '${hours}h ${mins}m',
-    'status': 'Present',
-  };
-}
-
-String _formatDate(DateTime dt) =>
-    '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-
-String _formatTime(DateTime dt) {
-  final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
-  final min = dt.minute.toString().padLeft(2, '0');
-  final period = dt.hour >= 12 ? 'PM' : 'AM';
-  return '$hour:$min $period';
 }
