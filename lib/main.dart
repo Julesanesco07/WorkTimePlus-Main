@@ -5,8 +5,17 @@ import 'services/local_db.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Seed the demo account once (no-op if already exists)
+  // Seed demo account (no-op if already exists)
   await LocalDB.seedDemoUser();
+
+  // Seed starter tasks for ALL existing users who have none yet
+  await LocalDB.seedTasksForAllUsers();
+
+  // Backfill paternalDays / maternalDays for users created before these fields existed
+  await LocalDB.migrateLeaveBalances();
+
+  // Backfill leaderId / members / task.assignedTo for projects created before leader feature
+  await LocalDB.migrateProjectLeaderFields();
 
   runApp(const WorktimePlusApp());
 }

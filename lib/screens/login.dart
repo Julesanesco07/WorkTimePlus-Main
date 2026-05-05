@@ -41,7 +41,7 @@ class _LoginPageState extends State<LoginPage>
     _fadeAnim  = CurvedAnimation(
         parent: _animController, curve: Curves.easeOut);
     _slideAnim =
-        Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
+        Tween<Offset>(begin: const Offset(0, 0.10), end: Offset.zero)
             .animate(CurvedAnimation(
             parent: _animController, curve: Curves.easeOut));
     _animController.forward();
@@ -57,6 +57,7 @@ class _LoginPageState extends State<LoginPage>
 
   // ── Login Handler ─────────────────────────────────────────
   Future<void> _handleLogin() async {
+    FocusScope.of(context).unfocus();
     setState(() => _errorMessage = null);
     if (!_formKey.currentState!.validate()) return;
 
@@ -85,7 +86,7 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  // ── Forgot Password ───────────────────────────────────────
+  // ── Forgot Password Sheet ─────────────────────────────────
   void _showForgotPasswordSheet() {
     final emailCtrl = TextEditingController();
     showModalBottomSheet(
@@ -95,9 +96,9 @@ class _LoginPageState extends State<LoginPage>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (_) => Padding(
+      builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 32,
           left: 24, right: 24, top: 24,
         ),
         child: Column(
@@ -184,266 +185,294 @@ class _LoginPageState extends State<LoginPage>
   // ── Build ─────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    final screenH  = MediaQuery.of(context).size.height;
+    final topPad   = MediaQuery.of(context).padding.top;
+    final botPad   = MediaQuery.of(context).padding.bottom;
+    final logoSize = (screenH * 0.22).clamp(110.0, 190.0);
+
     return Scaffold(
       backgroundColor: cloudWhite,
+      // Let scaffold shrink when keyboard appears
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height -
-                MediaQuery.of(context).padding.top,
-            child: _buildFormSection(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Form Section ──────────────────────────────────────────
-  Widget _buildFormSection() {
-    return FadeTransition(
-      opacity: _fadeAnim,
-      child: SlideTransition(
-        position: _slideAnim,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 40),
-
-                // ── Logo ─────────────────────────────────────
-                Center(
-                  child: Transform.scale(
-                    scale: 2,
-                    child: Transform.translate(
-                      offset: const Offset(0, 20),
-                      child: Image.asset(
-                        'images/LogoNBG.png',
-                        height: 300,
-                        width: 300,
-                        errorBuilder: (_, __, ___) => const Text(
-                          'W+',
-                          style: TextStyle(
-                              color: navyBlue,
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                  ),
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: SlideTransition(
+            position: _slideAnim,
+            child: SingleChildScrollView(
+              keyboardDismissBehavior:
+              ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: ConstrainedBox(
+                // Fill at least the visible area so footer sits at bottom
+                constraints: BoxConstraints(
+                  minHeight: screenH - topPad - botPad,
                 ),
-                const SizedBox(height: 36),
+                child: IntrinsicHeight(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
 
-                const Text('Welcome back',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: navyBlue)),
-                const SizedBox(height: 4),
-                const Text('Sign in to your account to continue',
-                    style: TextStyle(fontSize: 13, color: steelBlue)),
-                const SizedBox(height: 28),
-
-                // ── Email ────────────────────────────────────
-                _InputField(
-                  controller: _emailController,
-                  label: 'Email Address',
-                  hint: 'you@company.com',
-                  icon: Icons.email_outlined,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (val) {
-                    if (val == null || val.isEmpty)
-                      return 'Please enter your email';
-                    if (!val.contains('@'))
-                      return 'Enter a valid email address';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // ── Password ──────────────────────────────────
-                _InputField(
-                  controller: _passwordController,
-                  label: 'Password',
-                  hint: '••••••••',
-                  icon: Icons.lock_outline_rounded,
-                  obscureText: _obscurePassword,
-                  suffixIcon: GestureDetector(
-                    onTap: () => setState(
-                            () => _obscurePassword = !_obscurePassword),
-                    child: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      color: steelBlue,
-                      size: 20,
-                    ),
-                  ),
-                  validator: (val) {
-                    if (val == null || val.isEmpty)
-                      return 'Please enter your password';
-                    if (val.length < 6)
-                      return 'Password must be at least 6 characters';
-                    return null;
-                  },
-                ),
-
-                // ── Error message ─────────────────────────────
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(children: [
-                      Icon(Icons.error_outline,
-                          color: Colors.red.shade400, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(_errorMessage!,
-                            style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontSize: 12)),
-                      ),
-                    ]),
-                  ),
-                ],
-                const SizedBox(height: 12),
-
-                // ── Remember me + Forgot Password ─────────────
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(children: [
-                      GestureDetector(
-                        onTap: () => setState(
-                                () => _rememberMe = !_rememberMe),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          width: 20,
-                          height: 20,
-                          decoration: BoxDecoration(
-                            color: _rememberMe
-                                ? navyBlue
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(5),
-                            border: Border.all(
-                              color: _rememberMe
-                                  ? navyBlue
-                                  : const Color(0xFFBDBDBD),
-                              width: 2,
+                        // ── Logo ──────────────────────────────────
+                        const SizedBox(height: 28),
+                        Center(
+                          child: Transform.scale(
+                            scale: 3,
+                            child: Image.asset(
+                              'images/LogoNBG.png',
+                              height: logoSize,
+                              width: logoSize,
+                              fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => Text(
+                                'W+',
+                                style: TextStyle(
+                                    color: navyBlue,
+                                    fontSize: logoSize * 0.28,
+                                    fontWeight: FontWeight.bold),
+                              ),
                             ),
                           ),
-                          child: _rememberMe
-                              ? const Icon(Icons.check,
-                              size: 13, color: Colors.white)
-                              : null,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text('Remember me',
-                          style:
-                          TextStyle(fontSize: 13, color: steelBlue)),
-                    ]),
-                    GestureDetector(
-                      onTap: _showForgotPasswordSheet,
-                      child: const Text('Forgot Password?',
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: orange,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
+                        const SizedBox(height: 28),
 
-                // ── Login Button ──────────────────────────────
-                GestureDetector(
-                  onTap: _isLoading ? null : _handleLogin,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: _isLoading
-                          ? navyBlue.withOpacity(0.7)
-                          : orange,
-                      borderRadius: BorderRadius.circular(14),
-                      boxShadow: [
-                        BoxShadow(
-                          color: orange.withOpacity(
-                              _isLoading ? 0 : 0.35),
-                          blurRadius: 14,
-                          offset: const Offset(0, 5),
+                        // ── Welcome text ──────────────────────────
+                        const Text('Welcome back',
+                            style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: navyBlue)),
+                        const SizedBox(height: 4),
+                        const Text(
+                            'Sign in to your account to continue',
+                            style: TextStyle(
+                                fontSize: 13, color: steelBlue)),
+                        const SizedBox(height: 24),
+
+                        // ── Email ─────────────────────────────────
+                        _InputField(
+                          controller: _emailController,
+                          label: 'Email Address',
+                          hint: 'you@company.com',
+                          icon: Icons.email_outlined,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (val) {
+                            if (val == null || val.isEmpty)
+                              return 'Please enter your email';
+                            if (!val.contains('@'))
+                              return 'Enter a valid email address';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 14),
+
+                        // ── Password ──────────────────────────────
+                        _InputField(
+                          controller: _passwordController,
+                          label: 'Password',
+                          hint: '••••••••',
+                          icon: Icons.lock_outline_rounded,
+                          obscureText: _obscurePassword,
+                          suffixIcon: GestureDetector(
+                            onTap: () => setState(() =>
+                            _obscurePassword = !_obscurePassword),
+                            child: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: steelBlue,
+                              size: 20,
+                            ),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.isEmpty)
+                              return 'Please enter your password';
+                            if (val.length < 6)
+                              return 'Password must be at least 6 characters';
+                            return null;
+                          },
+                        ),
+
+                        // ── Error message ─────────────────────────
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: Colors.red.shade200),
+                            ),
+                            child: Row(children: [
+                              Icon(Icons.error_outline,
+                                  color: Colors.red.shade400,
+                                  size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(_errorMessage!,
+                                    style: TextStyle(
+                                        color: Colors.red.shade700,
+                                        fontSize: 12)),
+                              ),
+                            ]),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+
+                        // ── Remember me + Forgot password ─────────
+                        Row(
+                          mainAxisAlignment:
+                          MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(children: [
+                              GestureDetector(
+                                onTap: () => setState(() =>
+                                _rememberMe = !_rememberMe),
+                                child: AnimatedContainer(
+                                  duration: const Duration(
+                                      milliseconds: 180),
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: _rememberMe
+                                        ? navyBlue
+                                        : Colors.transparent,
+                                    borderRadius:
+                                    BorderRadius.circular(5),
+                                    border: Border.all(
+                                      color: _rememberMe
+                                          ? navyBlue
+                                          : const Color(0xFFBDBDBD),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  child: _rememberMe
+                                      ? const Icon(Icons.check,
+                                      size: 13,
+                                      color: Colors.white)
+                                      : null,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text('Remember me',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: steelBlue)),
+                            ]),
+                            GestureDetector(
+                              onTap: _showForgotPasswordSheet,
+                              child: const Text('Forgot Password?',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: orange,
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+
+                        // ── Sign In button ─────────────────────────
+                        GestureDetector(
+                          onTap: _isLoading ? null : _handleLogin,
+                          child: AnimatedContainer(
+                            duration:
+                            const Duration(milliseconds: 200),
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 16),
+                            decoration: BoxDecoration(
+                              color: _isLoading
+                                  ? navyBlue.withOpacity(0.7)
+                                  : orange,
+                              borderRadius:
+                              BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: orange.withOpacity(
+                                      _isLoading ? 0 : 0.35),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: _isLoading
+                                  ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child:
+                                CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white),
+                              )
+                                  : const Text('Sign In',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight:
+                                      FontWeight.bold,
+                                      fontSize: 16,
+                                      letterSpacing: 0.5)),
+                            ),
+                          ),
+                        ),
+
+                        // ── Flexible gap pushes footer down ────────
+                        const Expanded(child: SizedBox(height: 20)),
+
+                        // ── Create account link ────────────────────
+                        Center(
+                          child: GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                  const RegisterPage()),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8),
+                              child: RichText(
+                                text: const TextSpan(
+                                  text: "Don't have an account?  ",
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: steelBlue),
+                                  children: [
+                                    TextSpan(
+                                      text: 'Create one',
+                                      style: TextStyle(
+                                          color: orange,
+                                          fontWeight:
+                                          FontWeight.w700),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // ── Footer ────────────────────────────────
+                        Center(
+                          child: Padding(
+                            padding:
+                            const EdgeInsets.only(bottom: 16),
+                            child: Text(
+                              '© ${DateTime.now().year} Worktime+. All rights reserved.',
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFFBDBDBD)),
+                            ),
+                          ),
                         ),
                       ],
                     ),
-                    child: Center(
-                      child: _isLoading
-                          ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white),
-                      )
-                          : const Text('Sign In',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              letterSpacing: 0.5)),
-                    ),
                   ),
                 ),
-
-                const Spacer(),
-
-                // ── Create account link ───────────────────────
-                Center(
-                  child: GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => const RegisterPage()),
-                    ),
-                    child: RichText(
-                      text: const TextSpan(
-                        text: "Don't have an account?  ",
-                        style:
-                        TextStyle(fontSize: 13, color: steelBlue),
-                        children: [
-                          TextSpan(
-                            text: 'Create one',
-                            style: TextStyle(
-                                color: orange,
-                                fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // ── Footer ────────────────────────────────────
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Text(
-                      '© ${DateTime.now().year} Worktime+. All rights reserved.',
-                      style: const TextStyle(
-                          fontSize: 11, color: Color(0xFFBDBDBD)),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -466,7 +495,6 @@ class _InputField extends StatelessWidget {
   static const navyBlue  = Color(0xFF2B457B);
   static const steelBlue = Color(0xFF4A698F);
   static const softGray  = Color(0xFFF2F2F2);
-  static const orange    = Color(0xFFE97638);
 
   const _InputField({
     required this.controller,

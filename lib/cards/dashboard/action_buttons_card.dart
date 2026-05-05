@@ -16,51 +16,53 @@ class ActionButtonsCard extends StatelessWidget {
     required this.onBreakEnd,
   });
 
-  static const navyBlue  = Color(0xFF2B457B);
-  static const orange    = Color(0xFFE97638);
-  static const steelBlue = Color(0xFF4A698F);
-
   bool get _isWorking  => status == 'working';
   bool get _isOnBreak  => status == 'on_break';
   bool get _isTimedIn  => status == 'working' || status == 'on_break';
-  bool get _isIdle     => status == 'idle';
-  bool get _isTimedOut => status == 'timed_out';
+
+  // ── Time button ───────────────────────────────────────────
+  String       get _timeLabel  => _isTimedIn ? 'Time Out'    : 'Time In';
+  IconData     get _timeIcon   => _isTimedIn ? Icons.logout_rounded : Icons.login_rounded;
+  Color        get _timeColor  => _isTimedIn ? Colors.red.shade600  : Colors.green.shade600;
+  VoidCallback get _timeAction => _isTimedIn ? onTimeOut     : onTimeIn;
+
+  // ── Break button ──────────────────────────────────────────
+  String       get _breakLabel  => _isOnBreak ? 'End Break'          : 'Start Break';
+  IconData     get _breakIcon   => _isOnBreak ? Icons.play_arrow_rounded : Icons.free_breakfast_rounded;
+  Color        get _breakColor  => _isOnBreak ? Colors.red.shade600   : Colors.green.shade600;
+  VoidCallback get _breakAction => _isOnBreak ? onBreakEnd            : onBreakStart;
 
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      Row(children: [
-        Expanded(child: _ActionButton(
-          label: 'Time In',   icon: Icons.login_rounded,
-          color: Colors.green.shade600, isEnabled: _isIdle || _isTimedOut, onTap: onTimeIn,
-        )),
-        const SizedBox(width: 10),
-        Expanded(child: _ActionButton(
-          label: 'Time Out',  icon: Icons.logout_rounded,
-          color: navyBlue, isEnabled: _isTimedIn, onTap: onTimeOut,
-        )),
-      ]),
-      const SizedBox(height: 10),
-      Row(children: [
-        Expanded(child: _ActionButton(
-          label: 'Start Break', icon: Icons.free_breakfast_rounded,
-          color: steelBlue, isEnabled: _isWorking, onTap: onBreakStart,
-        )),
-        const SizedBox(width: 10),
-        Expanded(child: _ActionButton(
-          label: 'End Break',   icon: Icons.play_arrow_rounded,
-          color: orange, isEnabled: _isOnBreak, onTap: onBreakEnd,
-        )),
-      ]),
+    return Row(children: [
+      Expanded(
+        child: _ActionButton(
+          label:     _timeLabel,
+          icon:      _timeIcon,
+          color:     _timeColor,
+          isEnabled: true,
+          onTap:     _timeAction,
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: _ActionButton(
+          label:     _breakLabel,
+          icon:      _breakIcon,
+          color:     _breakColor,
+          isEnabled: _isTimedIn,
+          onTap:     _breakAction,
+        ),
+      ),
     ]);
   }
 }
 
 class _ActionButton extends StatelessWidget {
-  final String   label;
-  final IconData icon;
-  final Color    color;
-  final bool     isEnabled;
+  final String       label;
+  final IconData     icon;
+  final Color        color;
+  final bool         isEnabled;
   final VoidCallback onTap;
 
   const _ActionButton({

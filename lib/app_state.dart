@@ -20,6 +20,9 @@ class AppState {
   String get userEmail=> _user?['email']        as String? ?? '';
   int get vacationBalance => _user?['vacationDays'] as int? ?? 0;
   int get sickBalance     => _user?['sickDays']     as int? ?? 0;
+  int get paternalBalance  => _user?['paternalDays']  as int? ?? 0;
+  int get maternalBalance  => _user?['maternalDays']  as int? ?? 0;
+  int get emergencyBalance => _user?['emergencyDays'] as int? ?? 0;
 
   // ── Login / Logout ────────────────────────────────────────
   /// Returns true and stores user if credentials match.

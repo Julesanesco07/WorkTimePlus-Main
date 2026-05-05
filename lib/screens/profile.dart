@@ -96,6 +96,95 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  // ── Dev: Clear all local data ─────────────────────────────
+  void _showClearDataDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(children: [
+          Icon(Icons.delete_forever_rounded,
+              color: Colors.red.shade400, size: 20),
+          const SizedBox(width: 8),
+          const Text('Clear All Data',
+              style: TextStyle(
+                  color: navyBlue,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16)),
+        ]),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will permanently delete:',
+              style: TextStyle(fontSize: 13, color: steelBlue),
+            ),
+            const SizedBox(height: 8),
+            ...[
+              'All user accounts',
+              'All attendance records',
+              'All leave requests',
+              'All tasks',
+            ].map((e) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(e,
+                  style: const TextStyle(
+                      fontSize: 12, color: steelBlue)),
+            )),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(children: [
+                Icon(Icons.warning_amber_rounded,
+                    color: Colors.red.shade400, size: 14),
+                const SizedBox(width: 6),
+                const Expanded(
+                  child: Text(
+                    'This cannot be undone. You will be logged out.',
+                    style: TextStyle(fontSize: 11, color: Colors.red),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel',
+                style: TextStyle(color: steelBlue)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade400,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await LocalDB.clearAll();
+              await AppState().logout();
+              if (!mounted) return;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(
+                    builder: (_) => const LoginPage()),
+                    (route) => false,
+              );
+            },
+            child: const Text('Clear Everything',
+                style: TextStyle(color: Colors.white, fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showLogoutDialog() {
     showDialog(
       context: context,
@@ -447,6 +536,15 @@ class _ProfilePageState extends State<ProfilePage> {
           iconColor: steelBlue,
           label: 'Help & Support',
           onTap: () {},
+        ),
+        _Divider(),
+        _AccountRow(
+          icon: Icons.delete_forever_rounded,
+          iconColor: Colors.red.shade300,
+          label: 'Clear All Data (Dev)',
+          labelColor: Colors.red.shade300,
+          onTap: _showClearDataDialog,
+          showArrow: false,
         ),
         _Divider(),
         _AccountRow(

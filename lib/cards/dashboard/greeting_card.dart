@@ -82,7 +82,7 @@ class GreetingCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('$greeting, $firstName 👋',
+              Text('$greeting, $firstName ',
                   style: const TextStyle(
                       fontSize: 19,
                       fontWeight: FontWeight.bold,

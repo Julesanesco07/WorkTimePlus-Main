@@ -3,6 +3,7 @@ import 'screens/dashboard.dart';
 import 'screens/attendance.dart';
 import 'screens/leave.dart';
 import 'screens/task.dart';
+import 'screens/project_list.dart';
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -21,6 +22,7 @@ class _MainScaffoldState extends State<MainScaffold> {
       const AttendancePage(),
       const LeaveRequestPage(),
       const TaskPage(),
+      const ProjectListPage(),
     ];
 
     return Scaffold(
@@ -43,9 +45,8 @@ class _MainScaffoldState extends State<MainScaffold> {
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _NavItem(
                   icon: Icons.dashboard_outlined,
@@ -60,7 +61,7 @@ class _MainScaffoldState extends State<MainScaffold> {
                   onTap: () => setState(() => _currentIndex = 1),
                 ),
                 _NavItem(
-                  icon: Icons.description_rounded ,
+                  icon: Icons.description_rounded,
                   label: 'Leave',
                   isSelected: _currentIndex == 2,
                   onTap: () => setState(() => _currentIndex = 2),
@@ -70,6 +71,12 @@ class _MainScaffoldState extends State<MainScaffold> {
                   label: 'Tasks',
                   isSelected: _currentIndex == 3,
                   onTap: () => setState(() => _currentIndex = 3),
+                ),
+                _NavItem(
+                  icon: Icons.folder_outlined,
+                  label: 'Projects',
+                  isSelected: _currentIndex == 4,
+                  onTap: () => setState(() => _currentIndex = 4),
                 ),
               ],
             ),
@@ -81,9 +88,9 @@ class _MainScaffoldState extends State<MainScaffold> {
 }
 
 class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
+  final IconData     icon;
+  final String       label;
+  final bool         isSelected;
   final VoidCallback onTap;
 
   const _NavItem({
@@ -98,48 +105,47 @@ class _NavItem extends StatelessWidget {
     const navyBlue = Color(0xFF2B457B);
     const orange   = Color(0xFFE97638);
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? navyBlue.withOpacity(0.08) : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? navyBlue.withOpacity(0.08) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
                 icon,
                 color: isSelected ? navyBlue : const Color(0xFF9EAFC2),
                 size: isSelected ? 26 : 24,
               ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
-                color: isSelected ? navyBlue : const Color(0xFF9EAFC2),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                  color: isSelected ? navyBlue : const Color(0xFF9EAFC2),
+                ),
               ),
-            ),
-            const SizedBox(height: 2),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: 3,
-              width: isSelected ? 20 : 0,
-              decoration: BoxDecoration(
-                color: orange,
-                borderRadius: BorderRadius.circular(2),
+              const SizedBox(height: 2),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: 3,
+                width: isSelected ? 20 : 0,
+                decoration: BoxDecoration(
+                  color: orange,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../app_state.dart';
 
 class StatsCard extends StatelessWidget {
-  const StatsCard({super.key});
+  final String thisWeek;    // e.g. "34h 20m"
+  final String overtime;    // e.g. "2h 10m"  or "0h 0m"
+  final int    leaveLeft;   // total remaining leave days
+
+  const StatsCard({
+    super.key,
+    required this.thisWeek,
+    required this.overtime,
+    required this.leaveLeft,
+  });
 
   static const navyBlue  = Color(0xFF2B457B);
   static const orange    = Color(0xFFE97638);
@@ -10,25 +18,33 @@ class StatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final leaveLeft = AppState().vacationBalance;
     return Row(children: [
-      Expanded(child: _StatTile(
+      Expanded(
+        child: _StatTile(
           label: 'This Week',
-          value: '34h 20m',
-          icon: Icons.bar_chart_rounded,
-          color: steelBlue)),
+          value: thisWeek,
+          icon:  Icons.bar_chart_rounded,
+          color: steelBlue,
+        ),
+      ),
       const SizedBox(width: 10),
-      Expanded(child: _StatTile(
+      Expanded(
+        child: _StatTile(
           label: 'Overtime',
-          value: '2h 10m',
-          icon: Icons.more_time_rounded,
-          color: orange)),
+          value: overtime,
+          icon:  Icons.more_time_rounded,
+          color: orange,
+        ),
+      ),
       const SizedBox(width: 10),
-      Expanded(child: _StatTile(
+      Expanded(
+        child: _StatTile(
           label: 'Leave Left',
           value: '$leaveLeft days',
-          icon: Icons.event_available_rounded,
-          color: navyBlue)),
+          icon:  Icons.event_available_rounded,
+          color: navyBlue,
+        ),
+      ),
     ]);
   }
 }
@@ -55,19 +71,22 @@ class _StatTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withOpacity(0.15)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 6),
-        Text(value,
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: color)),
-        const SizedBox(height: 2),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 10, color: Color(0xFF9E9E9E))),
-      ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
+          const SizedBox(height: 2),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10, color: Color(0xFF9E9E9E))),
+        ],
+      ),
     );
   }
 }

@@ -22,7 +22,6 @@ class _RegisterPageState extends State<RegisterPage>
   final _formKey            = GlobalKey<FormState>();
   final _nameController     = TextEditingController();
   final _emailController    = TextEditingController();
-  final _employeeIdController = TextEditingController();
   final _departmentController = TextEditingController();
   final _positionController   = TextEditingController();
   final _passwordController   = TextEditingController();
@@ -56,7 +55,6 @@ class _RegisterPageState extends State<RegisterPage>
     _animController.dispose();
     _nameController.dispose();
     _emailController.dispose();
-    _employeeIdController.dispose();
     _departmentController.dispose();
     _positionController.dispose();
     _passwordController.dispose();
@@ -82,32 +80,34 @@ class _RegisterPageState extends State<RegisterPage>
       return;
     }
 
-    // Check if Employee ID is already taken
-    final allUsers = await LocalDB.getUsers();
-    final idTaken  = allUsers.any((u) =>
-    (u['employeeId'] as String?)?.toLowerCase() ==
-        _employeeIdController.text.trim().toLowerCase());
-    if (idTaken) {
-      setState(() {
-        _isLoading    = false;
-        _errorMessage = 'This Employee ID is already registered.';
-      });
-      return;
-    }
-
     // Save new user
+    final now        = DateTime.now();
+    final newId      = LocalDB.generateId();
+    // Auto-generate Employee ID from timestamp: EMP-yyyyMMddHHmmss
+    final employeeId = 'EMP-'
+        '${now.year}'
+        '${now.month.toString().padLeft(2, '0')}'
+        '${now.day.toString().padLeft(2, '0')}'
+        '${now.hour.toString().padLeft(2, '0')}'
+        '${now.minute.toString().padLeft(2, '0')}'
+        '${now.second.toString().padLeft(2, '0')}';
     await LocalDB.saveUser({
-      'id':           LocalDB.generateId(),
+      'id':           newId,
       'name':         _nameController.text.trim(),
       'email':        _emailController.text.trim(),
       'password':     _passwordController.text,
-      'employeeId':   _employeeIdController.text.trim(),
+      'employeeId':   employeeId,
       'department':   _departmentController.text.trim(),
       'position':     _positionController.text.trim(),
-      'vacationDays': 12,   // default leave balances
+      'vacationDays': 12,
       'sickDays':     7,
-      'createdAt':    DateTime.now().toIso8601String(),
+      'paternalDays': 7,
+      'maternalDays': 105,
+      'createdAt':    now.toIso8601String(),
     });
+
+    // Seed starter tasks, attendance history and leave history
+    await LocalDB.seedNewUserData(newId);
 
     setState(() => _isLoading = false);
     if (!mounted) return;
@@ -214,17 +214,6 @@ class _RegisterPageState extends State<RegisterPage>
                             // ── Work info section ────────
                             _SectionLabel(label: 'Work Info'),
                             const SizedBox(height: 10),
-
-                            _InputField(
-                              controller: _employeeIdController,
-                              label: 'Employee ID',
-                              hint: 'e.g. EMP-00200',
-                              icon: Icons.badge_outlined,
-                              validator: (v) => v == null || v.trim().isEmpty
-                                  ? 'Please enter your Employee ID'
-                                  : null,
-                            ),
-                            const SizedBox(height: 14),
 
                             _InputField(
                               controller: _departmentController,
@@ -516,11 +505,11 @@ class _InputField extends StatelessWidget {
             errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide:
-                BorderSide(color: Colors.red.shade300, width: 1.5)),
+                BorderSide(color: navyBlue, width: 1.5)),
             focusedErrorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide:
-                BorderSide(color: Colors.red.shade300, width: 1.5)),
+                BorderSide(color: navyBlue, width: 1.5)),
           ),
         ),
       ],

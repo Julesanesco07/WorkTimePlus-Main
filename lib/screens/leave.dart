@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:worktime/cards/leave/leave_balance.dart';
 import 'package:worktime/cards/leave/leave_form.dart';
 import 'package:worktime/cards/leave/leave_history.dart';
+import 'package:worktime/services/local_db.dart';
+import 'package:worktime/app_state.dart';
 
 class LeaveRequestPage extends StatefulWidget {
   const LeaveRequestPage({super.key});
@@ -11,48 +13,73 @@ class LeaveRequestPage extends StatefulWidget {
 }
 
 class _LeaveRequestPageState extends State<LeaveRequestPage> {
-  static const navyBlue  = Color(0xFF2B457B);
-  static const steelBlue = Color(0xFF4A698F);
+  static const navyBlue = Color(0xFF2B457B);
 
-  // ── Data ──────────────────────────────────────────────────
-  final List<Map<String, dynamic>> _pending = [
-    {'type': 'Vacation Leave', 'dates': 'Oct 14 – Oct 16, 2025', 'days': 3},
-    {'type': 'Sick Leave',     'dates': 'Nov 5 – Nov 6, 2025',   'days': 2},
-  ];
+  int _refreshTrigger = 0;
 
-  final List<Map<String, dynamic>> _history = [
-    {'type': 'Sick Leave',     'dates': 'Jan 10 – Jan 11, 2025', 'status': 'Approved', 'days': 2},
-    {'type': 'Vacation Leave', 'dates': 'Dec 20 – Dec 22, 2024', 'status': 'Approved', 'days': 3},
-    {'type': 'Vacation Leave', 'dates': 'Sep 1 – Sep 3, 2024',   'status': 'Rejected', 'days': 3},
-  ];
-
-  // ── On form submit ────────────────────────────────────────
-  void _onSubmit(String type, DateTime start, DateTime end, String reason) {
-    setState(() {
-      _pending.insert(0, {
-        'type':  type,
-        'dates': '${start.month}/${start.day}/${start.year} – ${end.month}/${end.day}/${end.year}',
-        'days':  end.difference(start).inDays + 1,
-      });
-    });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Text('Leave request submitted successfully!'),
-      backgroundColor: Colors.green.shade600,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    ));
+  // ── Format helpers ────────────────────────────────────────
+  String _fmt(DateTime dt) {
+    const months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[dt.month]} ${dt.day}, ${dt.year}';
   }
 
-  // ── Build ─────────────────────────────────────────────────
+  String _dateKey(DateTime dt) =>
+      '${dt.year}-'
+          '${dt.month.toString().padLeft(2, '0')}-'
+          '${dt.day.toString().padLeft(2, '0')}';
+
+  // ── Called by LeaveForm on submit ─────────────────────────
+  Future<void> _onSubmit(
+      String type, DateTime start, DateTime end, String reason) async {
+    final userId   = AppState().userId;
+    final now      = DateTime.now();
+    final id       = now.millisecondsSinceEpoch.toString();
+    final days     = end.difference(start).inDays + 1;
+    final datesStr = start == end
+        ? _fmt(start)
+        : '${_fmt(start)} – ${_fmt(end)}';
+
+    // saveLeaveWithAttendance saves the leave record AND marks
+    // each weekday in the range as 'Pending Leave' in attendance
+    await LocalDB.saveLeaveWithAttendance(
+      userId: userId,
+      leave: {
+        'id':        id,
+        'userId':    userId,
+        'type':      type,
+        'startDate': _dateKey(start),
+        'endDate':   _dateKey(end),
+        'days':      days,
+        'dates':     datesStr,
+        'appliedOn': _fmt(now),
+        'reason':    reason,
+        'status':    'Pending',
+        'createdAt': now.toIso8601String(),
+      },
+    );
+
+    if (mounted) {
+      setState(() => _refreshTrigger++);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Leave request submitted successfully!'),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
-
-          // ── Scrollable App Bar ───────────────────────────
           SliverAppBar(
             backgroundColor: Colors.white,
             elevation: 0,
@@ -62,29 +89,25 @@ class _LeaveRequestPageState extends State<LeaveRequestPage> {
             titleSpacing: 16,
             title: const Text(
               'Leave Request',
-              style: TextStyle(color: navyBlue, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: navyBlue,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18),
             ),
           ),
-
-          // ── Page content ─────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-
                 const LeaveBalance(),
                 const SizedBox(height: 20),
-
                 LeaveForm(onSubmit: _onSubmit),
                 const SizedBox(height: 24),
-
-                LeaveHistory(pending: _pending, history: _history),
+                LeaveHistory(refreshTrigger: _refreshTrigger),
                 const SizedBox(height: 24),
-
               ]),
             ),
           ),
-
         ],
       ),
     );
